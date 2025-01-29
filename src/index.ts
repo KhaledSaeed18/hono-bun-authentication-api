@@ -20,7 +20,20 @@ app.use('*',
 )
 
 const authMiddleware = jwt({
-  secret: process.env.JWT_SECRET!,
+  secret: process.env.JWT_SECRET!
+})
+
+app.onError((error, c) => {
+  if (error.name === 'Unauthorized') {
+    return c.json({
+      statusCode: 401,
+      message: `Unauthorized, ${error.cause && typeof error.cause === 'object' && 'name' in error.cause ? error.cause.name : 'unknown'}`
+    }, 401)
+  }
+  return c.json({
+    statusCode: 401,
+    message: error.cause || 'Unauthorized',
+  }, 401)
 })
 
 
@@ -138,7 +151,9 @@ app.post('/api/signin', async (c) => {
     const token = await sign({
       userId: user.id,
       iat: Math.floor(Date.now() / 1000), // issued at
-      exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // expires in 24 hours
+      // exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // expires in 24 hours
+      // 1 min for testing
+      exp: Math.floor(Date.now() / 1000) + (60 * 1) // expires in 1 min
     }, jwtSecret!)
 
     return c.json({

@@ -13,20 +13,18 @@ const jwtSecret = process.env.JWT_SECRET
 app.use('*', cors())
 
 app.use('*', async (c, next) => {
-  await next();
-  c.header('X-Content-Type-Options', 'nosniff');
-  c.header('X-Frame-Options', 'DENY');
-  c.header('X-XSS-Protection', '1; mode=block');
-  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-});
+  await next()
+  c.header('X-Content-Type-Options', 'nosniff')
+  c.header('X-Frame-Options', 'DENY')
+  c.header('X-XSS-Protection', '1; mode=block')
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+})
+
 
 const authLimiter = rateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 5, // 5 attempts
-  keyGenerator: (c) => {
-    const ip = c.req.header('x-forwarded-for') || 'unknown';
-    return ip;
-  }
+  keyGenerator: (c) => c.req.raw.headers.get('x-forwarded-for') || c.req.raw.headers.get('cf-connecting-ip') || c.req.raw.headers.get('x-real-ip') || c.req.raw.headers.get('remote-addr') || 'unknown'
 })
 
 const authMiddleware = jwt({

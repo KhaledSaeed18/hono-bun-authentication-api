@@ -47,11 +47,13 @@ app.post('/api/signup', async (c) => {
       }, 409)
     }
 
+    const hashedPassword = await Bun.password.hash(password)
+
     const user = await prisma.user.create({
       data: {
         username,
         email,
-        password,
+        password: hashedPassword,
       }
     })
 

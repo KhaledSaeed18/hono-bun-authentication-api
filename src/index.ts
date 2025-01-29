@@ -151,9 +151,7 @@ app.post('/api/signin', async (c) => {
     const token = await sign({
       userId: user.id,
       iat: Math.floor(Date.now() / 1000), // issued at
-      // exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // expires in 24 hours
-      // 1 min for testing
-      exp: Math.floor(Date.now() / 1000) + (60 * 1) // expires in 1 min
+      exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // expires in 24 hours
     }, jwtSecret!)
 
     return c.json({
@@ -173,31 +171,36 @@ app.post('/api/signin', async (c) => {
 })
 
 app.get('/api/me', authMiddleware, async (c) => {
-  const userId = c.get('jwtPayload').userId
+  try {
+    const userId = c.get('jwtPayload').userId
 
-  if (!userId) {
-    return c.json({
-      statusCode: 401,
-      message: 'Unauthorized'
-    }, 401)
-  }
-
-  const user = await prisma.user.findUnique({
-    where: {
-      id: userId
-    },
-    select: {
-      id: true,
-      username: true,
-      email: true
+    if (!userId) {
+      return c.json({
+        statusCode: 401,
+        message: 'Unauthorized'
+      }, 401)
     }
-  })
 
-  return c.json({
-    statusCode: 200,
-    message: 'Data fetched successfully',
-    data: user
-  }, 200)
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userId
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true
+      }
+    })
+
+    return c.json({
+      statusCode: 200,
+      message: 'Data fetched successfully',
+      data: user
+    }, 200)
+  } catch (e) {
+    const error = e instanceof Error ? e.message : 'Internal server error'
+    return c.json({ error }, 500)
+  }
 })
 
 

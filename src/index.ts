@@ -20,7 +20,6 @@ app.use('*', async (c, next) => {
   c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
 })
 
-
 const authLimiter = rateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 5, // 5 attempts
@@ -216,7 +215,6 @@ app.get('/api/me', authLimiter, authMiddleware, async (c) => {
     return c.json({ error }, 500)
   }
 })
-
 
 export default {
   port: process.env.PORT,

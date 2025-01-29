@@ -11,31 +11,27 @@ const prisma = new PrismaClient()
 const jwtSecret = process.env.JWT_SECRET
 
 app.use('*', cors())
-app.use('*',
-  rateLimiter({
-    windowMs: 15 * 60 * 1000,
-    limit: 10,
-    keyGenerator: (c) => c.req.header('x-forwarded-for') || 'unknown'
-  })
-)
+
+app.use('*', async (c, next) => {
+  await next();
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('X-XSS-Protection', '1; mode=block');
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+});
+
+const authLimiter = rateLimiter({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 5, // 5 attempts
+  keyGenerator: (c) => {
+    const ip = c.req.header('x-forwarded-for') || 'unknown';
+    return ip;
+  }
+})
 
 const authMiddleware = jwt({
   secret: process.env.JWT_SECRET!
 })
-
-app.onError((error, c) => {
-  if (error.name === 'Unauthorized') {
-    return c.json({
-      statusCode: 401,
-      message: `Unauthorized, ${error.cause && typeof error.cause === 'object' && 'name' in error.cause ? error.cause.name : 'unknown'}`
-    }, 401)
-  }
-  return c.json({
-    statusCode: 401,
-    message: error.cause || 'Unauthorized',
-  }, 401)
-})
-
 
 const signupSchema = z.object({
   username: z.string()
@@ -63,7 +59,7 @@ const signinSchema = z.object({
     .min(8, "Password must be at least 8 characters")
 })
 
-app.post('/api/signup', async (c) => {
+app.post('/api/signup', authLimiter, async (c) => {
   const body = await c.req.json()
   const parsed = signupSchema.safeParse(body)
 
@@ -116,7 +112,7 @@ app.post('/api/signup', async (c) => {
   }
 })
 
-app.post('/api/signin', async (c) => {
+app.post('/api/signin', authLimiter, async (c) => {
   const body = await c.req.json()
   const parsed = signinSchema.safeParse(body)
 
@@ -175,7 +171,7 @@ app.post('/api/signin', async (c) => {
   }
 })
 
-app.get('/api/me', authMiddleware, async (c) => {
+app.get('/api/me', authLimiter, authMiddleware, async (c) => {
   try {
     const userId = c.get('jwtPayload').userId
 

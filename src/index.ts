@@ -1,6 +1,6 @@
-import { Context, Env, Hono } from 'hono'
+import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { Promisify, rateLimiter } from 'hono-rate-limiter'
+import { rateLimiter } from 'hono-rate-limiter'
 import { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
 

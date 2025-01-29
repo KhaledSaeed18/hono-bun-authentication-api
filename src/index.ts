@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { rateLimiter } from 'hono-rate-limiter'
 import { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
-import { sign } from 'hono/jwt';
+import { jwt, sign } from 'hono/jwt';
 
 const app = new Hono()
 const prisma = new PrismaClient()
@@ -18,6 +18,11 @@ app.use('*',
     keyGenerator: (c) => c.req.header('x-forwarded-for') || 'unknown'
   })
 )
+
+const authMiddleware = jwt({
+  secret: process.env.JWT_SECRET!,
+})
+
 
 const signupSchema = z.object({
   username: z.string()
@@ -152,4 +157,36 @@ app.post('/api/signin', async (c) => {
   }
 })
 
-export default app
+app.get('/api/me', authMiddleware, async (c) => {
+  const userId = c.get('jwtPayload').userId
+
+  if (!userId) {
+    return c.json({
+      statusCode: 401,
+      message: 'Unauthorized'
+    }, 401)
+  }
+
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId
+    },
+    select: {
+      id: true,
+      username: true,
+      email: true
+    }
+  })
+
+  return c.json({
+    statusCode: 200,
+    message: 'Data fetched successfully',
+    data: user
+  }, 200)
+})
+
+
+export default {
+  port: process.env.PORT,
+  fetch: app.fetch,
+}

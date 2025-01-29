@@ -17,8 +17,11 @@ app.use('*',
 )
 
 const signupSchema = z.object({
-  username: z.string().min(2, "Username must be at least 2 characters").max(20, "Username must be at most 20 characters"),
-  email: z.string().email(),
+  username: z.string()
+    .min(2, "Username must be at least 2 characters")
+    .max(20, "Username must be at most 20 characters"),
+  email: z.string()
+    .email(),
   password: z.string()
     .min(8, "Password must be at least 8 characters")
     .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
@@ -28,7 +31,8 @@ const signupSchema = z.object({
 })
 
 const signinSchema = z.object({
-  email: z.string().email(),
+  email: z.string()
+    .email(),
   password: z.string()
     .min(8, "Password must be at least 8 characters")
 })
@@ -39,6 +43,9 @@ app.post('/api/signup', async (c) => {
 
   if (!parsed.success) {
     const errorMessages = parsed.error.issues.map(issue => issue.message)
+    if (errorMessages.length === 1) {
+      return c.json({ message: errorMessages[0] }, 400)
+    }
     return c.json({ errors: errorMessages }, 400)
   }
 
@@ -89,6 +96,9 @@ app.post('/api/signin', async (c) => {
 
   if (!parsed.success) {
     const errorMessages = parsed.error.issues.map(issue => issue.message)
+    if (errorMessages.length === 1) {
+      return c.json({ message: errorMessages[0] }, 400)
+    }
     return c.json({ errors: errorMessages }, 400)
   }
 

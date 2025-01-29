@@ -188,14 +188,29 @@ app.get('/api/me', authMiddleware, async (c) => {
       select: {
         id: true,
         username: true,
-        email: true
+        email: true,
+        createdAt: true
       }
     })
+
+    if (!user) {
+      return c.json({
+        statusCode: 404,
+        message: 'User not found',
+      }, 404)
+    }
+
+    const formattedDate = new Date(user.createdAt).toLocaleString()
 
     return c.json({
       statusCode: 200,
       message: 'Data fetched successfully',
-      data: user
+      data: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        createdAt: formattedDate
+      }
     }, 200)
   } catch (e) {
     const error = e instanceof Error ? e.message : 'Internal server error'

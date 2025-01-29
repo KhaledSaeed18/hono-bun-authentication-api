@@ -39,9 +39,12 @@ app.onError((error, c) => {
 
 const signupSchema = z.object({
   username: z.string()
+    .trim()
     .min(2, "Username must be at least 2 characters")
     .max(20, "Username must be at most 20 characters"),
   email: z.string()
+    .trim()
+    .toLowerCase()
     .email(),
   password: z.string()
     .min(8, "Password must be at least 8 characters")
@@ -53,6 +56,8 @@ const signupSchema = z.object({
 
 const signinSchema = z.object({
   email: z.string()
+    .trim()
+    .toLowerCase()
     .email(),
   password: z.string()
     .min(8, "Password must be at least 8 characters")

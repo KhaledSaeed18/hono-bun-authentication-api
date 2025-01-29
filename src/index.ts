@@ -3,9 +3,12 @@ import { cors } from 'hono/cors'
 import { rateLimiter } from 'hono-rate-limiter'
 import { PrismaClient } from '@prisma/client'
 import { z } from 'zod'
+import { sign } from 'hono/jwt';
 
 const app = new Hono()
 const prisma = new PrismaClient()
+
+const jwtSecret = process.env.JWT_SECRET
 
 app.use('*', cors())
 app.use('*',
@@ -127,13 +130,20 @@ app.post('/api/signin', async (c) => {
       }, 401)
     }
 
+    const token = await sign({
+      userId: user.id,
+      iat: Math.floor(Date.now() / 1000), // issued at
+      exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // expires in 24 hours
+    }, jwtSecret!)
+
     return c.json({
       statusCode: 200,
-      message: 'Login successful',
+      message: 'Signin successful',
       data: {
         id: user.id,
         username: user.username,
         email: user.email,
+        token
       }
     }, 200)
   } catch (e) {

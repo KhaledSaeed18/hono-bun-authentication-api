@@ -22,13 +22,18 @@ const signupSchema = z.object({
   password: z.string().min(6),
 })
 
-app.post('/api/signup', async (c) => {
+const signinSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+})
 
+app.post('/api/signup', async (c) => {
   const body = await c.req.json()
   const parsed = signupSchema.safeParse(body)
 
   if (!parsed.success) {
-    return c.json({ error: parsed.error }, 400)
+    const errorMessages = parsed.error.issues.map(issue => issue.message)
+    return c.json({ errors: errorMessages }, 400)
   }
 
   const { username, email, password } = parsed.data
@@ -71,7 +76,56 @@ app.post('/api/signup', async (c) => {
     console.error(error)
     return c.json({ error }, 500)
   }
+})
 
+app.post('/api/signin', async (c) => {
+  const body = await c.req.json()
+  const parsed = signinSchema.safeParse(body)
+
+  if (!parsed.success) {
+    const errorMessages = parsed.error.issues.map(issue => issue.message)
+    return c.json({ errors: errorMessages }, 400)
+  }
+
+  const { email, password } = body
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        email: email,
+      }
+    })
+
+    if (!user) {
+      return c.json({
+        statusCode: 404,
+        message: 'User not found',
+      }, 404)
+    }
+
+    const passwordMatch = await Bun.password.verify(password, user.password)
+
+    if (!passwordMatch) {
+      return c.json({
+        statusCode: 401,
+        message: 'Invalid credentials',
+      }, 401)
+    }
+
+    return c.json({
+      statusCode: 200,
+      message: 'Login successful',
+      data: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+      }
+    }, 200)
+  } catch (e) {
+    const error = e instanceof Error ? e.message : 'Internal server error'
+    console.error(error)
+    return c.json({ error }, 500)
+  }
 })
 
 export default app

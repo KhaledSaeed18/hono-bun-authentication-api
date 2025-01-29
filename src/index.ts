@@ -79,7 +79,6 @@ app.post('/api/signup', async (c) => {
     }, 201)
   } catch (e) {
     const error = e instanceof Error ? e.message : 'Internal server error'
-    console.error(error)
     return c.json({ error }, 500)
   }
 })
@@ -129,7 +128,6 @@ app.post('/api/signin', async (c) => {
     }, 200)
   } catch (e) {
     const error = e instanceof Error ? e.message : 'Internal server error'
-    console.error(error)
     return c.json({ error }, 500)
   }
 })

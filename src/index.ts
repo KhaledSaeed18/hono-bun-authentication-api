@@ -10,8 +10,10 @@ const prisma = new PrismaClient()
 
 const jwtSecret = process.env.JWT_SECRET
 
+// Enable CORS for all routes
 app.use('*', cors())
 
+// Security middleware to add headers for security best practices
 app.use('*', async (c, next) => {
   await next()
   c.header('X-Content-Type-Options', 'nosniff')
@@ -20,16 +22,19 @@ app.use('*', async (c, next) => {
   c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
 })
 
+// Rate limiter for authentication endpoints to prevent brute-force attacks
 const authLimiter = rateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 5, // 5 attempts
+  limit: 5, // Allow up to 5 requests per window per IP
   keyGenerator: (c) => c.req.raw.headers.get('x-forwarded-for') || c.req.raw.headers.get('cf-connecting-ip') || c.req.raw.headers.get('x-real-ip') || c.req.raw.headers.get('remote-addr') || 'unknown'
 })
 
+// JWT authentication middleware
 const authMiddleware = jwt({
   secret: process.env.JWT_SECRET!
 })
 
+// Validation schema for user signup using Zod
 const signupSchema = z.object({
   username: z.string()
     .trim()
@@ -47,6 +52,7 @@ const signupSchema = z.object({
     .regex(/[#?!@$%^&*-]/, "Password must contain at least one special character (#?!@$%^&*-)")
 })
 
+// Validation schema for user signin
 const signinSchema = z.object({
   email: z.string()
     .trim()
@@ -56,163 +62,106 @@ const signinSchema = z.object({
     .min(8, "Password must be at least 8 characters")
 })
 
+// User signup endpoint
 app.post('/api/signup', authLimiter, async (c) => {
   const body = await c.req.json()
   const parsed = signupSchema.safeParse(body)
 
   if (!parsed.success) {
     const errorMessages = parsed.error.issues.map(issue => issue.message)
-    if (errorMessages.length === 1) {
-      return c.json({ message: errorMessages[0] }, 400)
-    }
     return c.json({ errors: errorMessages }, 400)
   }
 
   const { username, email, password } = parsed.data
 
   try {
+    // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: {
-        email: email,
-      }
+      where: { email },
     })
 
     if (existingUser) {
-      return c.json({
-        statusCode: 409,
-        message: 'User already exists',
-      }, 409)
+      return c.json({ statusCode: 409, message: 'User already exists' }, 409)
     }
 
+    // Hash password before storing it
     const hashedPassword = await Bun.password.hash(password)
 
+    // Create new user
     const user = await prisma.user.create({
-      data: {
-        username,
-        email,
-        password: hashedPassword,
-      }
+      data: { username, email, password: hashedPassword }
     })
 
-    return c.json({
-      statusCode: 201,
-      message: 'User created successfully',
-      data: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-      }
-    }, 201)
+    return c.json({ statusCode: 201, message: 'User created successfully', data: { id: user.id, username, email } }, 201)
   } catch (e) {
-    const error = e instanceof Error ? e.message : 'Internal server error'
-    return c.json({ error }, 500)
+    return c.json({ error: e instanceof Error ? e.message : 'Internal server error' }, 500)
   }
 })
 
+// User signin endpoint
 app.post('/api/signin', authLimiter, async (c) => {
   const body = await c.req.json()
   const parsed = signinSchema.safeParse(body)
 
   if (!parsed.success) {
     const errorMessages = parsed.error.issues.map(issue => issue.message)
-    if (errorMessages.length === 1) {
-      return c.json({ message: errorMessages[0] }, 400)
-    }
     return c.json({ errors: errorMessages }, 400)
   }
 
   const { email, password } = body
 
   try {
-    const user = await prisma.user.findUnique({
-      where: {
-        email: email,
-      }
-    })
+    // Find user by email
+    const user = await prisma.user.findUnique({ where: { email } })
 
     if (!user) {
-      return c.json({
-        statusCode: 404,
-        message: 'User not found',
-      }, 404)
+      return c.json({ statusCode: 404, message: 'User not found' }, 404)
     }
 
+    // Verify password
     const passwordMatch = await Bun.password.verify(password, user.password)
 
     if (!passwordMatch) {
-      return c.json({
-        statusCode: 401,
-        message: 'Invalid credentials',
-      }, 401)
+      return c.json({ statusCode: 401, message: 'Invalid credentials' }, 401)
     }
 
+    // Generate JWT token
     const token = await sign({
       userId: user.id,
-      iat: Math.floor(Date.now() / 1000), // issued at
-      exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // expires in 24 hours
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + (60 * 60 * 24) // 24 hours expiration
     }, jwtSecret!)
 
-    return c.json({
-      statusCode: 200,
-      message: 'Signin successful',
-      data: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        token
-      }
-    }, 200)
+    return c.json({ statusCode: 200, message: 'Signin successful', data: { id: user.id, username: user.username, email, token } }, 200)
   } catch (e) {
-    const error = e instanceof Error ? e.message : 'Internal server error'
-    return c.json({ error }, 500)
+    return c.json({ error: e instanceof Error ? e.message : 'Internal server error' }, 500)
   }
 })
 
+// Get authenticated user data
 app.get('/api/me', authLimiter, authMiddleware, async (c) => {
   try {
     const userId = c.get('jwtPayload').userId
 
     if (!userId) {
-      return c.json({
-        statusCode: 401,
-        message: 'Unauthorized'
-      }, 401)
+      return c.json({ statusCode: 401, message: 'Unauthorized' }, 401)
     }
 
+    // Fetch user details excluding password
     const user = await prisma.user.findUnique({
-      where: {
-        id: userId
-      },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        createdAt: true
-      }
+      where: { id: userId },
+      select: { id: true, username: true, email: true, createdAt: true }
     })
 
     if (!user) {
-      return c.json({
-        statusCode: 404,
-        message: 'User not found',
-      }, 404)
+      return c.json({ statusCode: 404, message: 'User not found' }, 404)
     }
 
     const formattedDate = new Date(user.createdAt).toLocaleString()
 
-    return c.json({
-      statusCode: 200,
-      message: 'Data fetched successfully',
-      data: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        createdAt: formattedDate
-      }
-    }, 200)
+    return c.json({ statusCode: 200, message: 'Data fetched successfully', data: { id: user.id, username: user.username, email: user.email, createdAt: formattedDate } }, 200)
   } catch (e) {
-    const error = e instanceof Error ? e.message : 'Internal server error'
-    return c.json({ error }, 500)
+    return c.json({ error: e instanceof Error ? e.message : 'Internal server error' }, 500)
   }
 })
 
